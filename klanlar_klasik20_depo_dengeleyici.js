@@ -1,9 +1,6 @@
-/* Klanlar.org - Klasik 20 uyarlaması (ön sürüm)
- * Orijinal hesaplama algoritması korunmuştur. Kaynak gönderimi otomatik değildir;
- * buton yalnızca kaynak köyün pazar ekranını açar.
- * Klanlar ekibinin script kurallarına ve onay şartlarına uyulmalıdır.
- */
-//script by Sophie "Shinko to Kuma". discord: Sophie#2418 website: https://www.shinko-to-kuma.com/
+// Klanlar.org Klasik 20 uyarlaması. Orijinal depo dengeleme algoritması korunmuştur.
+// Her satırdaki "Hammadde Gönder" düğmesi, yalnızca o satırın transferini tek tıkla başlatır.
+// Oyun API'si ve sunucu arayüzü değişikliklerinde uyumluluk kontrolü gerekebilir.
 console.log("Latest update: 20 March 2026 - Sophie 'Shinko to Kuma'");
 var testPage;
 var is_mobile = !!navigator.userAgent.match(/iphone|android|blackberry/ig) || false;
@@ -86,8 +83,8 @@ var langShinko = [
     "Odun",
     "Kil",
     "Demir",
-    "Pazarı Aç",
-    "Kaynak Dengeleyici",
+    "Hammadde Gönder",
+    "Sophie 'Shinko to Kuma' tarafından oluşturuldu",
     "Toplam odun",
     "Toplam kil",
     "Toplam demir",
@@ -739,17 +736,43 @@ else {
 
 
 function sendResource(sourceID, targetID, woodAmount, stoneAmount, ironAmount, rowNr) {
-    var sourceVillage = villagesData.find(function (v) { return String(v.id) === String(sourceID); });
-    var targetVillage = villagesData.find(function (v) { return String(v.id) === String(targetID); });
-    var summary = "Kaynak gönderimi otomatik yapılmaz.\n\n" +
-        "Kaynak: " + (sourceVillage ? sourceVillage.name : sourceID) + "\n" +
-        "Hedef: " + (targetVillage ? targetVillage.name : targetID) + "\n" +
-        "Odun: " + numberWithCommas(woodAmount) + "\n" +
-        "Kil: " + numberWithCommas(stoneAmount) + "\n" +
-        "Demir: " + numberWithCommas(ironAmount) + "\n\n" +
-        "Pazar ekranı açılacak. Miktarları kontrol ederek gönderimi kendin tamamlayabilirsin.";
-    if (!confirm(summary)) return;
-    window.location.href = "game.php?screen=market&mode=send&village=" + encodeURIComponent(sourceID);
+    // Her tıklama yalnızca seçilen tek satırdaki tek transferi gönderir.
+    var $button = $('#'+rowNr+' :button');
+    if ($button.length && $button.prop('disabled')) return;
+    if (typeof TribalWars === 'undefined' || typeof TribalWars.post !== 'function') {
+        if (typeof UI !== 'undefined' && UI.ErrorMessage) {
+            UI.ErrorMessage('Gönderim API\'si bulunamadı. Oyun pazar ekranı bu sürümle uyumlu olmayabilir.');
+        } else {
+            alert('Gönderim API\'si bulunamadı. Oyun pazar ekranı bu sürümle uyumlu olmayabilir.');
+        }
+        return;
+    }
+
+    $(':button[id^="building"]').prop('disabled', true);
+    var payload = {
+        target_id: targetID,
+        wood: woodAmount,
+        stone: stoneAmount,
+        iron: ironAmount
+    };
+    TribalWars.post("market", {
+        ajaxaction: "map_send",
+        village: sourceID
+    }, payload, function (response) {
+        if (response && response.message) {
+            UI.SuccessMessage(response.message);
+            console.log(response.message);
+        }
+        var row = document.getElementById(String(rowNr));
+        if (row) row.remove();
+        if ($('#tableSend tr').length <= 2) {
+            alert('Gönderilecek başka hammadde kalmadı.');
+            $('.btn-pp').remove();
+        }
+        setTimeout(function () {
+            $(':button[id^="building"]').prop('disabled', false).first().trigger('focus');
+        }, 150);
+    }, !1);
 }
 
 function displayEverything() {
@@ -1561,11 +1584,11 @@ function displayEverything() {
             <td width="50" style="text-align:center">${cleanLinks[i].wood}<span class="icon header wood"> </span></td>
             <td width="50" style="text-align:center">${cleanLinks[i].stone}<span class="icon header stone"> </span></td>
             <td width="50" style="text-align:center">${cleanLinks[i].iron}<span class="icon header iron"> </span></td>
-            <td style="text-align:center"><input type="button" class="btn btnSophie" value="${langShinko[7]}" onclick="sendResource(${cleanLinks[i].source},${cleanLinks[i].target},${cleanLinks[i].wood},${cleanLinks[i].stone},${cleanLinks[i].iron},${i})"></td>
+            <td style="text-align:center"><input type="button" class="btn btnSophie" id="building" tabindex="-1" value="${langShinko[7]}" onclick="sendResource(${cleanLinks[i].source},${cleanLinks[i].target},${cleanLinks[i].wood},${cleanLinks[i].stone},${cleanLinks[i].iron},${i})"></td>
         </tr>`;
         }
         $("#appendHere").eq(0).append(listHTML);
-
+        $("#building")[0].focus();
         /*$(document).ready(function(){
             UI.ToolTip('[data-toggle="tooltip"]',);
           });*/
