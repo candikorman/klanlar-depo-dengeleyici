@@ -735,6 +735,47 @@ else {
 }
 
 
+function sendAllResources() {
+    if (typeof TribalWars === "undefined" || typeof TribalWars.post !== "function") {
+        if (typeof UI !== "undefined" && UI.ErrorMessage) UI.ErrorMessage("Gönderim API bulunamadı."); else alert("Gönderim API bulunamadı.");
+        return;
+    }
+    if (window.resourceBatchRunning) return;
+    var queue = (cleanLinks || []).map(function (item, index) {
+        return {source:item.source, target:item.target, wood:parseInt(item.wood,10)||0, stone:parseInt(item.stone,10)||0, iron:parseInt(item.iron,10)||0, row:index};
+    }).filter(function (item) { return item.wood + item.stone + item.iron > 0; });
+    if (!queue.length) { alert("Gönderilecek hammadde bulunamadı."); return; }
+    if (!confirm(queue.length + " ayrı köy transferi sırayla gönderilecek. Devam edilsin mi?")) return;
+    window.resourceBatchRunning = true;
+    var button = document.getElementById("sendAllResourcesBtn");
+    if (button) { button.disabled = true; button.value = "Gönderiliyor (0/" + queue.length + ")"; }
+    var sent = 0;
+    function sendNext() {
+        if (sent >= queue.length) {
+            window.resourceBatchRunning = false;
+            if (button) { button.disabled = false; button.value = "Tümünü Otomatik Gönder"; }
+            if (typeof UI !== "undefined" && UI.SuccessMessage) UI.SuccessMessage("Toplu gönderim tamamlandı: " + sent + "/" + queue.length); else alert("Toplu gönderim tamamlandı: " + sent + "/" + queue.length);
+            return;
+        }
+        var item = queue[sent];
+        var payload = {target_id:item.target, wood:item.wood, stone:item.stone, iron:item.iron};
+        try {
+            TribalWars.post("market", {ajaxaction:"map_send", village:item.source}, payload, function (response) {
+                sent++;
+                var row = document.getElementById(String(item.row));
+                if (row) row.remove();
+                if (button) button.value = "Gönderiliyor (" + sent + "/" + queue.length + ")";
+                if (response && response.message && typeof UI !== "undefined" && UI.SuccessMessage) UI.SuccessMessage(response.message);
+                setTimeout(sendNext, 500);
+            }, !1);
+        } catch (e) {
+            window.resourceBatchRunning = false;
+            if (button) { button.disabled = false; button.value = "Tekrar dene"; }
+            if (typeof UI !== "undefined" && UI.ErrorMessage) UI.ErrorMessage("Gönderim durduruldu (" + sent + "/" + queue.length + "): " + e.message); else alert("Gönderim durduruldu (" + sent + "/" + queue.length + "): " + e.message);
+        }
+    }
+    sendNext();
+}
 function sendResource(sourceID, targetID, woodAmount, stoneAmount, ironAmount, rowNr) {
     // Her tıklama yalnızca seçilen tek satırdaki tek transferi gönderir.
     var $button = $('#'+rowNr+' :button');
@@ -1467,7 +1508,7 @@ function displayEverything() {
                 <table id="tableSend" width="100%" class="sophHeader">
                 <tbody id="appendHere">
                     <tr>
-                        <td class="sophHeader" colspan=7 width=â€œ550â€ style="text-align:center" >${langShinko[0]}</td>
+                        <td class="sophHeader" colspan=7 width="550" style="text-align:center">${langShinko[0]} &nbsp; <input type="button" class="btn btnSophie" id="sendAllResourcesBtn" value="Tümünü Otomatik Gönder" onclick="sendAllResources()"></td>
                     </tr>
                     <tr>
                         <td class="sophHeader" width="25%" style="text-align:center">${langShinko[1]}</td>
